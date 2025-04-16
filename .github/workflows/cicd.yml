@@ -5,7 +5,7 @@ on: push
 env:
   API_VERSION: googleapi
   DEFAULT_APIGEE_ORG: primal-gate-456620-t1
-  DEFAULT_APIGEE_ENV: eval-group
+  DEFAULT_APIGEE_ENV: eval
   TEST_HOST: 34.120.59.6.nip.io
   GCP_SERVICE_ACCOUNT: ${{ secrets.SA_CI_CD }}
 
