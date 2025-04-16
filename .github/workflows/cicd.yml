@@ -1,7 +1,6 @@
 name: Apigee X CI/CD with Maven
 
-on:
-  push:
+on: push
 
 env:
   API_VERSION: googleapi
@@ -21,8 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Set Variables (Main/Prod/Other)
         run: |
@@ -36,97 +34,95 @@ jobs:
             echo "APIGEE_DEPLOYMENT_SUFFIX=$BRANCH" >> $GITHUB_ENV
           fi
 
-      - name: Cache Node Modules
+      - name: Cache node modules
         uses: actions/cache@v3
         with:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
 
-      - name: Install NPM Dependencies
-        run: npm ci
-
-      - name: Run Spectral Lint
+      - name: Install Dependencies
         run: |
-          ./node_modules/.bin/spectral lint -r ./test/spectral/.spectral.yaml -f html -o spectral-report.html ./specs/airport-1.0.0.yaml || true
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Lint OpenAPI (Spectral)
+        run: ./node_modules/.bin/spectral lint -r ./test/spectral/.spectral.yaml -f html -o spectral-report.html ./specs/airport-1.0.0.yaml || true
 
       - name: Archive Spectral Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: spectral-report
           path: spectral-report.html
 
-      - name: Run Apigeelint
-        run: |
-          ./node_modules/apigeelint/cli.js -s ./apiproxy -f html.js -e PO013,PO025 > apigeelint-out.html
+      - name: Apigeelint
+        run: ./node_modules/apigeelint/cli.js -s ./apiproxy -f html.js -e PO013,PO025 > apigeelint-out.html
 
-      - name: Archive Apigeelint Report
-        uses: actions/upload-artifact@v4
+      - name: Archive Apigeelint Results
+        uses: actions/upload-artifact@v3
         with:
           name: apigeelint-report
           path: apigeelint-out.html
 
-      - name: Run ESLint
-        run: |
-          ./node_modules/eslint/bin/eslint.js -c .eslintrc-jsc.yml --format html ./apiproxy/resources/jsc > eslint-out.html
+      - name: eslint
+        run: ./node_modules/eslint/bin/eslint.js -c .eslintrc-jsc.yml --format html ./apiproxy/resources/jsc > eslint-out.html
 
-      - name: Archive ESLint Report
-        uses: actions/upload-artifact@v4
+      - name: Archive eslint
+        uses: actions/upload-artifact@v3
         with:
           name: eslint-report
           path: eslint-out.html
 
-      - name: Run Mocha Unit Tests
-        run: |
-          ./node_modules/nyc/bin/nyc.js --reporter=html --reporter=text ./node_modules/mocha/bin/_mocha ./test/unit
+      - name: mocha
+        run: ./node_modules/nyc/bin/nyc.js --reporter=html --reporter=text ./node_modules/mocha/bin/_mocha ./test/unit
 
-      - name: Archive Mocha Report
-        uses: actions/upload-artifact@v4
+      - name: Archive Mocha
+        uses: actions/upload-artifact@v3
         with:
           name: mocha-report
           path: coverage/index.html
 
-      - name: Set up Java 1.8
+      - name: Set up JDK 1.8
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 8
 
-      - name: Cache Maven Dependencies
+      - name: Cache Maven
         uses: actions/cache@v3
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
 
-      - name: Create Service Account JSON
+      - name: Create Service Account JSON File
         run: echo '${{ secrets.SA_CI_CD }}' > sa.json
 
-      - name: Deploy Edge Config
+      - name: Deploy Apigee Configuration (EdgeConfig)
         run: |
           sed -i "s/target_apigee_env/${APIGEE_ENV}/g" ./EdgeConfig/edge.json
-          mvn install -q -P${API_VERSION} -Dapigee.org=${APIGEE_ORG} -Denv=${APIGEE_ENV} -Dsa=sa.json -Dapigee.config.file=./EdgeConfig/edge.json -Dapigee.config.options=update
+          mvn install -q -Pgoogleapi -Dapigee.org=${APIGEE_ORG} -Denv=${APIGEE_ENV} -Dsa=sa.json -Dapigee.config.file=./EdgeConfig/edge.json -Dapigee.config.options=update
 
-      - name: Package Apigee Proxy
-        run: |
-          mvn process-resources -P${API_VERSION} -Dcommit=${GITHUB_SHA} -Dauthor=${AUTHOR_EMAIL} -Ddeployment.suffix=${APIGEE_DEPLOYMENT_SUFFIX}
+      - name: Package Proxy
+        run: mvn process-resources -Pgoogleapi -Dcommit=${GITHUB_SHA} -Dauthor=${AUTHOR_EMAIL} -Ddeployment.suffix=${APIGEE_DEPLOYMENT_SUFFIX}
 
-      - name: Configure Apigee Proxy
-        run: |
-          mvn apigee-enterprise:configure -q -P${API_VERSION} -Dorg=${APIGEE_ORG} -Denv=${APIGEE_ENV} -Ddeployment.suffix=${APIGEE_DEPLOYMENT_SUFFIX}
+      - name: Configure Proxy
+        run: mvn apigee-enterprise:configure -q -Pgoogleapi -Dorg=${APIGEE_ORG} -Denv=${APIGEE_ENV} -Ddeployment.suffix=${APIGEE_DEPLOYMENT_SUFFIX}
 
-      - name: Deploy Apigee Proxy
-        run: |
-          mvn apigee-enterprise:deploy -q -P${API_VERSION} -Dorg=${APIGEE_ORG} -Denv=${APIGEE_ENV} -Dsa=sa.json -Ddeployment.suffix=${APIGEE_DEPLOYMENT_SUFFIX}
+      - name: Deploy Proxy
+        run: mvn apigee-enterprise:deploy -q -Pgoogleapi -Dorg=${APIGEE_ORG} -Denv=${APIGEE_ENV} -Dsa=sa.json -Ddeployment.suffix=${APIGEE_DEPLOYMENT_SUFFIX}
 
       - name: Run Apickli Tests
         run: |
           export API_BASEPATH="/airports-cicd/v1"
           sed -i "s@api_basepath@${API_BASEPATH}@g" ./test/integration/features/support/init.js
           sed -i "s@organization_hostname@${TEST_HOST}@g" ./test/integration/features/support/init.js
-          node ./node_modules/.bin/cucumber-js ./test/$PROXY_NAME/integration --format json:./report.json || true
-          node ./test/integration/index.js || true
+          node ./node_modules/.bin/cucumber-js ./test/$PROXY_NAME/integration --format json:./report.json
+          node ./test/integration/index.js
 
       - name: Archive Apickli Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: apickli-report
           path: cucumber_report.html
