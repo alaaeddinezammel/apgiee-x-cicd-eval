@@ -8,6 +8,7 @@ env:
   DEFAULT_APIGEE_ENV: eval
   TEST_HOST: 34.120.59.6.nip.io
   GCP_SERVICE_ACCOUNT: ${{ secrets.SA_CI_CD }}
+
   AUTHOR_EMAIL: ''
   APIGEE_ORG: ''
   APIGEE_ENV: ''
@@ -19,8 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Set Variables (Main/Prod/Other)
         run: |
@@ -40,15 +40,14 @@ jobs:
           path: ~/.npm
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
 
-      - name: Install Dependencies (npm install)
+      - name: Install Dependencies
         run: npm install
 
       - name: Lint OpenAPI (Spectral)
-        run: |
-          ./node_modules/.bin/spectral lint -r ./test/spectral/.spectral.yaml -f html -o spectral-report.html ./specs/airport-1.0.0.yaml || true
+        run: ./node_modules/.bin/spectral lint -r ./test/spectral/.spectral.yaml -f html -o spectral-report.html ./specs/airport-1.0.0.yaml || true
 
       - name: Archive Spectral Report
-        uses: actions/upload-artifact@v3.1.3
+        uses: actions/upload-artifact@v4
         with:
           name: spectral-report
           path: spectral-report.html
@@ -57,25 +56,25 @@ jobs:
         run: ./node_modules/apigeelint/cli.js -s ./apiproxy -f html.js -e PO013,PO025 > apigeelint-out.html
 
       - name: Archive Apigeelint Report
-        uses: actions/upload-artifact@v3.1.3
+        uses: actions/upload-artifact@v4
         with:
           name: apigeelint-report
           path: apigeelint-out.html
 
-      - name: ESLint
+      - name: eslint
         run: ./node_modules/eslint/bin/eslint.js -c .eslintrc-jsc.yml --format html ./apiproxy/resources/jsc > eslint-out.html
 
-      - name: Archive ESLint Report
-        uses: actions/upload-artifact@v3.1.3
+      - name: Archive eslint Report
+        uses: actions/upload-artifact@v4
         with:
           name: eslint-report
           path: eslint-out.html
 
-      - name: Mocha Unit Tests
+      - name: mocha
         run: ./node_modules/nyc/bin/nyc.js --reporter=html --reporter=text ./node_modules/mocha/bin/_mocha ./test/unit
 
-      - name: Archive Mocha Coverage Report
-        uses: actions/upload-artifact@v3.1.3
+      - name: Archive Mocha Report
+        uses: actions/upload-artifact@v4
         with:
           name: mocha-report
           path: coverage/index.html
@@ -92,10 +91,10 @@ jobs:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
 
-      - name: Create Service Account JSON
+      - name: Create Service Account JSON File
         run: echo '${{ secrets.SA_CI_CD }}' > sa.json
 
-      - name: Deploy Apigee Config (EdgeConfig)
+      - name: Deploy Apigee Configuration (EdgeConfig)
         run: |
           sed -i "s/target_apigee_env/${APIGEE_ENV}/g" ./EdgeConfig/edge.json
           mvn install -q -Pgoogleapi -Dapigee.org=${APIGEE_ORG} -Denv=${APIGEE_ENV} -Dsa=sa.json -Dapigee.config.file=./EdgeConfig/edge.json -Dapigee.config.options=update
@@ -114,11 +113,11 @@ jobs:
           export API_BASEPATH="/airports-cicd/v1"
           sed -i "s@api_basepath@${API_BASEPATH}@g" ./test/integration/features/support/init.js
           sed -i "s@organization_hostname@${TEST_HOST}@g" ./test/integration/features/support/init.js
-          node ./node_modules/.bin/cucumber-js ./test/$PROXY_NAME/integration --format json:./report.json || true
-          node ./test/integration/index.js || true
+          node ./node_modules/.bin/cucumber-js ./test/$PROXY_NAME/integration --format json:./report.json
+          node ./test/integration/index.js
 
       - name: Archive Apickli Report
-        uses: actions/upload-artifact@v3.1.3
+        uses: actions/upload-artifact@v4
         with:
           name: apickli-report
           path: cucumber_report.html
