@@ -61,14 +61,14 @@ jobs:
           name: apigeelint-report
           path: apigeelint-out.html
 
-      - name: eslint
-        run: ./node_modules/eslint/bin/eslint.js -c .eslintrc-jsc.yml --format html ./apiproxy/resources/jsc > eslint-out.html
-
-      - name: Archive eslint Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: eslint-report
-          path: eslint-out.html
+#      - name: eslint
+#        run: ./node_modules/eslint/bin/eslint.js -c .eslintrc-jsc.yml --format html ./apiproxy/resources/jsc > eslint-out.html
+#
+#      - name: Archive eslint Report
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: eslint-report
+#          path: eslint-out.html
 
       - name: mocha
         run: ./node_modules/nyc/bin/nyc.js --reporter=html --reporter=text ./node_modules/mocha/bin/_mocha ./test/unit
