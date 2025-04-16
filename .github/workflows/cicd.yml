@@ -8,7 +8,6 @@ env:
   DEFAULT_APIGEE_ENV: eval
   TEST_HOST: 34.120.59.6.nip.io
   GCP_SERVICE_ACCOUNT: ${{ secrets.SA_CI_CD }}
-
   AUTHOR_EMAIL: ''
   APIGEE_ORG: ''
   APIGEE_ENV: ''
@@ -20,13 +19,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Set Variables (Main/Prod/Other)
         run: |
           echo "AUTHOR_EMAIL=${{ github.actor }}" >> $GITHUB_ENV
           echo "APIGEE_ORG=${{ env.DEFAULT_APIGEE_ORG }}" >> $GITHUB_ENV
-          BRANCH=$(echo "${GITHUB_REF#refs/heads/}")
+          BRANCH=${GITHUB_REF#refs/heads/}
           if [[ $BRANCH == "prod" ]]; then
             echo "APIGEE_ENV=prod" >> $GITHUB_ENV
           else
@@ -41,7 +41,7 @@ jobs:
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
       - name: Lint OpenAPI (Spectral)
         run: ./node_modules/.bin/spectral lint -r ./test/spectral/.spectral.yaml -f html -o spectral-report.html ./specs/airport-1.0.0.yaml || true
@@ -61,16 +61,16 @@ jobs:
           name: apigeelint-report
           path: apigeelint-out.html
 
-      - name: eslint
-        run: ./node_modules/eslint/bin/eslint.js -c .eslintrc-jsc.yml --format html ./apiproxy/resources/jsc > eslint-out.html
+      - name: ESLint on JS files
+        run: ./node_modules/.bin/eslint ./apiproxy/resources/jsc --format html > eslint-out.html
 
-      - name: Archive eslint Report
+      - name: Archive ESLint Report
         uses: actions/upload-artifact@v4
         with:
           name: eslint-report
           path: eslint-out.html
 
-      - name: mocha
+      - name: Mocha Unit Tests
         run: ./node_modules/nyc/bin/nyc.js --reporter=html --reporter=text ./node_modules/mocha/bin/_mocha ./test/unit
 
       - name: Archive Mocha Report
